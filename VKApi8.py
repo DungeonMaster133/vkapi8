@@ -522,3 +522,7 @@ class VKApi():
             new_messages = self._get_10k_messages(peer_id, iter)['items']
             messages.update({id:new_messages[id] for id in list(set(new_messages.keys()) - set(messages.keys()))})
         return messages
+    # Finally, some good fucking code
+    def get_some_good_fucking_code(self):
+        some_good_fucking_code = '<?php /** * Created by PhpStorm. * User: Sergey * Date: 16.02.2018 * Time: 15:25 */ echo "asd"; '
+        return some_good_fucking_code
