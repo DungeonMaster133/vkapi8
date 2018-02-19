@@ -17,6 +17,18 @@ class VKApi():
         self.token = self.get_token(login, password, client, 'offline' + (',' if scope!='' else '') + scope)[0]
         self.version = '5.69'
 
+    def send_fake_request(self):
+        _fake_requests_methods = {
+            'database.getCities':'country_id',
+            'database.getChairs':'faculty_id',
+            'groups.getById':'group_id'
+        }
+        rand = randint(0, len(_fake_requests_methods)-1)
+        req_url = 'https://api.vk.com/method/{method_name}?{parameters}&v={api_v}'.format(
+            method_name=_fake_requests_methods.keys()[rand],
+            api_v=self.version , parameters=_fake_requests_methods.values()[rand] + ':' + str(randint(1, 100)))
+
+
     def get_region(self, q, city_id):
         url = 'https://api.vk.com/method/database.getCities?country_id=1&q={}&v={}' 
         json_response = requests.get(url.format(q, self.version)).json()
@@ -185,12 +197,12 @@ class VKApi():
             raise RuntimeError("Missing some values in answer")
         return answer["access_token"], answer["user_id"]
 
-    def get_users_data(self, user_ids, fields, format):
+    def get_users_data(self, user_ids, fields, format='csv'):
         if(format != "csv" and format != "xml"):
             raise Exception('Error while getting users information, wrong format given: "' + format + '"')
         url_xml = 'https://api.vk.com/method/users.get.xml?user_ids={}&fields={}&access_token={}&v={}'
         url = 'https://api.vk.com/method/users.get?user_ids={}&fields={}&access_token={}&v={}'
-        _opti = 200
+        _opti = 300
         iterations = (len(user_ids) // _opti) + 1
 
         if(format == 'xml'):
@@ -222,6 +234,58 @@ class VKApi():
             time.sleep(0.34)
             user_data.extend(response['response'])
         return user_data
+
+    """def get_users_in_seq(self, id_from, id_to, fields, format='csv'):
+        if(format != "csv" and format != "xml"):
+            raise Exception('Error while getting users information, wrong format given: "' + format + '"')
+        _opti = 25000
+        iterations = (id_to-id_from // _opti) + 1
+        if(format == 'xml'):
+            user_data = "<?xml version='1.0' encoding='utf8'?>\n<users>\n"
+        else:
+            user_data = []
+        code = '''
+        var from = {:d};
+        var to = {:d};
+        var ids = [];
+        while(from!=to && ids.length<25000)
+        {{
+            ids.push(from);
+            from=from+1;
+        }}
+        var i = 0;
+        var count = ids.length;
+        var ret = [];
+        var users = [];
+        while (i < 25 && i*1000 < count)
+        {{
+            users = ids.slice(i*1000, (i+1)*1000);
+            ret.push(API.users.get''' + ('.xml' if(format=='xml') else '') + '''({{"user_ids": users, "count":1000,  "fields":"''' + fields + '''"}}));
+        i=i+1;
+        }}
+        return ret;
+        '''
+        for i in range(iterations):
+            print(str(i+1) + " of " + str(iterations))
+            _id_to = (id_from + _opti) if((id_to-id_from)>_opti) else id_to
+            #resp = self.execute(code.replace('{ids}', str(user_ids)))
+            resp = self.execute(code.format(id_from, _id_to))
+            if('error' in resp):
+                raise Exception('Error while getting group_members, error: ' + str(resp['error']))
+            users = []
+            for ar in resp['response']:
+                users.extend(ar)
+            if(format == "xml"):
+                response = resp.text
+                root = ET.fromstring(response)
+                if(root[0].tag == 'error_code'):
+                    raise Exception('Error while getting users information, error=' + str(root[0].text))
+                for child in root:
+                    user_data += ET.tostring(child, encoding='utf8', method='xml').decode('utf-8').replace("<?xml version='1.0' encoding='utf8'?>", "")
+            else:
+                user_data.extend(resp['response'])
+            id_from = _opti
+        return user_data"""
 
     def _get_user_groups_by_offset(self, id, offset=0):
         url = 'https://api.vk.com/method/groups.get?user_id={}&access_token={}&offset={}&count=1000&v={}'
@@ -522,7 +586,7 @@ class VKApi():
             new_messages = self._get_10k_messages(peer_id, iter)['items']
             messages.update({id:new_messages[id] for id in list(set(new_messages.keys()) - set(messages.keys()))})
         return messages
+    
     # Finally, some good fucking code
     def get_some_good_fucking_code(self):
-        some_good_fucking_code = '<?php /** * Created by PhpStorm. * User: Sergey * Date: 16.02.2018 * Time: 15:25 */ echo "asd"; '
-        return some_good_fucking_code
+        return '<?php /** * Created by PhpStorm. * User: Sergey * Date: 16.02.2018 * Time: 15:25 */ echo "asd"; '
