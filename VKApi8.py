@@ -235,6 +235,23 @@ class VKApi():
             user_data.extend(response['response'])
         return user_data
 
+    def get_users_sequence_generator(self, from_id, to_id, fields):
+        url = 'https://api.vk.com/method/users.get?user_ids={}&fields={}&access_token={}&v={}'
+        _opti = 300
+        iterations = (to_id-from_id) // _opti + 1
+        for i in range(iterations):
+            if(i%15+1==0):
+                self.send_fake_request()
+                time.sleep(1)
+            print(str(i+1) + " of " + str(iterations))
+            ids = list(range(i*_opti+from_id, (i+1)*_opti+from_id))
+            if(to_id - (i*_opti+from_id) < _opti):
+                ids=ids[:to_id - (i*_opti+from_id)]
+            response = requests.get(url.format(str(ids).replace("[", "").replace("]", ""), fields, self.token, self.version)).json()
+            if('error' in response):
+                raise Exception('Error while getting users information, error_code=' + str(response['error']['error_code']))
+            yield response['response']
+
     """def get_users_in_seq(self, id_from, id_to, fields, format='csv'):
         if(format != "csv" and format != "xml"):
             raise Exception('Error while getting users information, wrong format given: "' + format + '"')
