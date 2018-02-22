@@ -1,4 +1,3 @@
-import requests
 import time
 import re
 import json
@@ -6,6 +5,7 @@ import itertools
 import xml.etree.ElementTree as ET
 import pprint
 
+import requests
 from html.parser import HTMLParser
 from urllib.parse import urlparse
 import urllib.request, urllib.parse, urllib.error
@@ -13,9 +13,10 @@ import urllib.request, urllib.error, urllib.parse
 import http.cookiejar
 
 class VKApi():
-    def __init__(self, login, password, client, scope='', version='5.69'):
+    def __init__(self, login, password, client, scope='', version='5.69', session=requests.Session()):
         self.token = self.get_token(login, password, client, 'offline' + (',' if scope!='' else '') + scope)[0]
         self.version = '5.69'
+        self.session = session
 
     def send_fake_request(self):
         _fake_requests_methods = {
@@ -27,11 +28,12 @@ class VKApi():
         req_url = 'https://api.vk.com/method/{method_name}?{parameters}&v={api_v}'.format(
             method_name=_fake_requests_methods.keys()[rand],
             api_v=self.version , parameters=_fake_requests_methods.values()[rand] + ':' + str(randint(1, 100)))
+        self.session.get(req_url)
 
 
     def get_region(self, q, city_id):
         url = 'https://api.vk.com/method/database.getCities?country_id=1&q={}&v={}' 
-        json_response = requests.get(url.format(q, self.version)).json()
+        json_response = self.session.get(url.format(q, self.version)).json()
         time.sleep(0.34)
         if json_response.get('error'):
             print(json_response.get('error'))
@@ -220,14 +222,14 @@ class VKApi():
             except:
                 break
             if(format == "xml"):
-                response = requests.get(url_xml.format(str(ids).replace("[", "").replace("]", ""), fields, self.token, self.version)).text
+                response = self.session.get(url_xml.format(str(ids).replace("[", "").replace("]", ""), fields, self.token, self.version)).text
                 root = ET.fromstring(response)
                 if(root[0].tag == 'error_code'):
                     raise Exception('Error while getting users information, error_code=' + str(root[0].text))
                 for child in root:
                     user_data += ET.tostring(child, encoding='utf8', method='xml').decode('utf-8').replace("<?xml version='1.0' encoding='utf8'?>", "")
             else:
-                response = requests.get(url.format(str(ids).replace("[", "").replace("]", ""), fields, self.token, self.version)).json()
+                response = self.session.get(url.format(str(ids).replace("[", "").replace("]", ""), fields, self.token, self.version)).json()
                 if('error' in response):
                     raise Exception('Error while getting users information, error_code=' + str(response['error']['error_code']))
                 user_data.extend(response['response'])
@@ -247,7 +249,7 @@ class VKApi():
             ids = list(range(i*_opti+from_id, (i+1)*_opti+from_id))
             if(to_id - (i*_opti+from_id) < _opti):
                 ids=ids[:to_id - (i*_opti+from_id)]
-            response = requests.get(url.format(str(ids).replace("[", "").replace("]", ""), fields, self.token, self.version)).json()
+            response = self.session.get(url.format(str(ids).replace("[", "").replace("]", ""), fields, self.token, self.version)).json()
             if('error' in response):
                 raise Exception('Error while getting users information, error_code=' + str(response['error']['error_code']))
             yield response['response']
@@ -306,7 +308,7 @@ class VKApi():
 
     def _get_user_groups_by_offset(self, id, offset=0):
         url = 'https://api.vk.com/method/groups.get?user_id={}&access_token={}&offset={}&count=1000&v={}'
-        json_response = requests.get(url.format(id,self.token, offset, self.version)).json()
+        json_response = self.session.get(url.format(id,self.token, offset, self.version)).json()
         time.sleep(0.34)
         if 'error' in json_response:
             raise Exception('Error while getting group members, error=' + str(json_response['error']))
@@ -322,7 +324,7 @@ class VKApi():
         return groups
 
     def execute(self, code):
-        resp = requests.post('https://api.vk.com/method/execute', data={'access_token':self.token, 'code':code, 'v':self.version})
+        resp = self.session.post('https://api.vk.com/method/execute', data={'access_token':self.token, 'code':code, 'v':self.version})
         time.sleep(0.34)
         if(resp.status_code != 200):
             raise Exception('Network error, error code: ' + str(resp.status_code))
@@ -430,10 +432,10 @@ class VKApi():
     def get_posts_by_offset(self, user_id, offset, count, flag, domain):
         if (domain):
             url = 'https://api.vk.com/method/wall.get?domain={}&offset={}&count={}&access_token={}&v=5.60'
-            users = requests.get(url.format(user_id, offset, count, self.token)).json()
+            users = self.session.get(url.format(user_id, offset, count, self.token)).json()
         else:
             url = 'https://api.vk.com/method/wall.get?owner_id={}&offset={}&count={}&access_token={}&v=5.60'
-            users = requests.get(url.format(user_id, offset, count, self.token)).json()
+            users = self.session.get(url.format(user_id, offset, count, self.token)).json()
         if users.get('error'):
             print(users.get('error')["error_msg"])
             return -1
@@ -488,7 +490,7 @@ class VKApi():
     def get_user_id(self, link):
         users_url = 'https://api.vk.com/method/users.get?user_ids={}&access_token={}&v={}'
         domain = link.split("/")[-1]
-        json_response = requests.get(users_url.format(domain, self.token, self.version)).json()
+        json_response = self.session.get(users_url.format(domain, self.token, self.version)).json()
         time.sleep(0.34)
         if json_response.get('error'):
             raise Exception('Error while getting friends urls, error_code=' + str(json_response['error']['error_code']))
