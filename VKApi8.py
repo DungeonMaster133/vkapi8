@@ -1,8 +1,10 @@
 import time
+import random
 import re
 import json
 import itertools
 import xml.etree.ElementTree as ET
+import datetime
 import pprint
 
 import requests
@@ -17,6 +19,7 @@ class VKApi():
         self.token = self.get_token(login, password, client, 'offline' + (',' if scope!='' else '') + scope)[0]
         self.version = '5.69'
         self.session = session
+        self.pp = pprint.PrettyPrinter(depth=1)
 
     def send_fake_request(self):
         _fake_requests_methods = {
@@ -24,10 +27,11 @@ class VKApi():
             'database.getChairs':'faculty_id',
             'groups.getById':'group_id'
         }
-        rand = randint(0, len(_fake_requests_methods)-1)
+        rand = random.randint(0, len(_fake_requests_methods)-1)
+        method=list(_fake_requests_methods.keys())[rand]
         req_url = 'https://api.vk.com/method/{method_name}?{parameters}&v={api_v}'.format(
-            method_name=_fake_requests_methods.keys()[rand],
-            api_v=self.version , parameters=_fake_requests_methods.values()[rand] + ':' + str(randint(1, 100)))
+            method_name=method,
+            api_v=self.version , parameters=_fake_requests_methods[method] + ':' + str(random.randint(1, 100)))
         self.session.get(req_url)
 
 
@@ -559,52 +563,63 @@ class VKApi():
             pass
         return {"count": resp['response']['count'], "items":friends}
 
-    def _get_10k_messages(self, peer_id, date=time.strftime("%d%m%Y")):
+    def _get_10k_messages(self, peer_id, date=time.strftime("%d%m%Y"), _offset=0):
         messages = {}
+        filtered=0
         for i in range(4):
             code = '''var peer_id = ''' + str(peer_id) + ''';
             var i = 0;
             var ret = [];
-            var count = 2500;
-            var data = {};
+            var count = 10000;
+            var data = [];
             var date = ''' + date + ''';
-            while (i*100 < count && i<25)
-            {
-                data = API.messages.search({"peer_id":peer_id, "date":date, "count":100, "offset":i*100 + ''' + str(2500*i) + '''});
+            while (i*100 + {offset} < count && i<25)
+            {{
+                data = API.messages.search({{"peer_id":peer_id, "date":date, "count":100, "offset":i*100 + {offset}}});
                 count = data["count"];
                 ret.push(data["items"]);
+                if(data["items"].length == 0){{
+                    return {{"count":count, "items":ret}};
+                }}
                 i=i+1;
-            }
-            return {"count":count, "items":ret};'''
+            }}
+            return {{"count":count, "items":ret}};'''.format(offset=i*2500+_offset)
+            print(code)
             resp = self.execute(code)
             if('error' in resp):
                 raise Exception('Error while getting all friends, error: ' + str(resp['error']))
             for ar in resp['response']['items']:
                 for message in ar:
-                    if('body' in message and message['body']!=''    ):
-                        messages[message['id']] = message['body']
-        return {"count": resp['response']['count'], "items":messages}
+                    if('body' in message and message['body']!=''):
+                        messages[message['id']] = {'body':message['body'], 'date':message['date'], 'user_id':message['user_id']}
+                    else:
+                        filtered+=1
+            if(not len(resp['response']['items']) or not len(resp['response']['items'][0])):
+                break
+            self.send_fake_request()
+        return {"count": resp['response']['count'], "filtered":filtered, "items":messages}
 
-    def get_all_messages(self, peer_id, first_date):
-        todate = time.strftime("%d%m%Y")
-        cur_year = int(time.strftime("%Y"))
-        cur_month = int(time.strftime("%m"))
-        first_year = int(first_date[4:])
-        first_month = int(first_date[2:4])
-        cur_day = int(time.strftime("%d"))
-        iters = []
-        if(cur_year == first_year):
-            iters = [str(cur_day)+(str(month) if month > 9 else str('0' + month))+str(cur_year) for month in range(first_month, cur_month+1)]
-        if(cur_year > first_year):
-            iters += [str(cur_day) + (str(month) if month > 9 else '0' + str(month)) + str(first_year) for month in range(first_month, 13)]
-            iters += [str(cur_day) + (str(month) if month > 9 else '0' + str(month)) + str(cur_year) for month in range(1, cur_month+1)]
-            for year in range(first_year+1, cur_year):
-                iters += [str(cur_day) + (str(month) if month > 9 else str('0' + month)) + str(year) for month in range(13)]
-        messages = {}
-        for iter in iters:
-            new_messages = self._get_10k_messages(peer_id, iter)['items']
-            messages.update({id:new_messages[id] for id in list(set(new_messages.keys()) - set(messages.keys()))})
-        return messages
+    def get_all_messages_generator(self, peer_id, opti=7500):
+        count = 10000
+        j = 0
+        date=time.strftime("%d%m%Y")
+        while j<count:
+            i = 0
+            messages = {}
+            while len(messages)<opti and i<count and i<opti:
+                new_messages = self._get_10k_messages(peer_id, date, i)
+                if(len(new_messages['items']) == 0):
+                    j = count
+                    break
+                count = new_messages['count']
+                i+=len(new_messages['items']) + new_messages['filtered']
+                messages.update(new_messages['items'])
+            time.sleep(5)
+            self.send_fake_request()
+            date = datetime.datetime.fromtimestamp(messages[min(list(messages.keys()))]['date']).strftime('%d%m%Y')
+            print(date)
+            j+=i
+            yield messages
     
     # Finally, some good fucking code
     def get_some_good_fucking_code(self):
