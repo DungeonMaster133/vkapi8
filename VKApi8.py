@@ -202,7 +202,7 @@ class VKApi():
         if "access_token" not in answer or "user_id" not in answer:
             raise RuntimeError("Missing some values in answer")
         return answer["access_token"], answer["user_id"]
-
+        
     def get_users_data(self, user_ids, fields, format='csv'):
         if(format != "csv" and format != "xml"):
             raise Exception('Error while getting users information, wrong format given: "' + format + '"')
@@ -420,11 +420,11 @@ class VKApi():
             for agr_info, method in methods_to_apply:
                 new_data = None
                 while not new_data:
-                    #try:
-                    new_data = method(ids_to_aggregate)
-                    #except:
-                    #    print('Something wrong, waiting...')
-                    #    time.sleep(3)
+                    try:
+                        new_data = method(ids_to_aggregate)
+                    except:
+                        print('Something wrong, waiting...')
+                        time.sleep(3)
                 for user, data in new_data.items():
                     try:
                         yield_data[user][agr_info] = data
