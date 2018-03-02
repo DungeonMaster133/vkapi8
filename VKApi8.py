@@ -584,7 +584,6 @@ class VKApi():
                 i=i+1;
             }}
             return {{"count":count, "items":ret}};'''.format(offset=i*2500+_offset)
-            print(code)
             resp = self.execute(code)
             if('error' in resp):
                 raise Exception('Error while getting all friends, error: ' + str(resp['error']))
@@ -614,10 +613,12 @@ class VKApi():
                 count = new_messages['count']
                 i+=len(new_messages['items']) + new_messages['filtered']
                 messages.update(new_messages['items'])
-            time.sleep(5)
+            if(len(messages)==0):
+                yield {}    
+                break
+            time.sleep(1)
             self.send_fake_request()
             date = datetime.datetime.fromtimestamp(messages[min(list(messages.keys()))]['date']).strftime('%d%m%Y')
-            print(date)
             j+=i
             yield messages
     
