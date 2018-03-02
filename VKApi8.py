@@ -599,11 +599,11 @@ class VKApi():
             self.send_fake_request()
         return {"count": resp['response']['count'], "filtered":filtered, "items":messages}
 
-    def get_all_messages_generator(self, peer_id, opti=7500):
+    def get_all_messages_generator(self, peer_id, opti=7500, limit=7500):
         count = 10000
         j = 0
         date=time.strftime("%d%m%Y")
-        while j<count:
+        while j<count and j*opti<limit:
             i = 0
             messages = {}
             while len(messages)<opti and i<count and i<opti:
