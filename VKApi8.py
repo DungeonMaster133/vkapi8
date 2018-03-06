@@ -203,13 +203,20 @@ class VKApi():
             raise RuntimeError("Missing some values in answer")
         return answer["access_token"], answer["user_id"]
         
-    def get_users_data(self, user_ids, fields, format='csv'):
+    def validate_users(self, user_ids):
+        ret_ids = []
+        new_users = self.get_users_data(user_ids, '')
+        for user in new_users:
+            if('deactivated' not in user):
+                ret_ids.append(user['id'])
+        return ret_ids
+
+    def get_users_data(self, user_ids, fields, format='csv', _opti=300):
         if(format != "csv" and format != "xml"):
             raise Exception('Error while getting users information, wrong format given: "' + format + '"')
         url_xml = 'https://api.vk.com/method/users.get.xml?user_ids={}&fields={}&access_token={}&v={}'
         url = 'https://api.vk.com/method/users.get?user_ids={}&fields={}&access_token={}&v={}'
-        _opti = 300
-        iterations = (len(user_ids) // _opti) + 1
+        iterations = (len(user_ids) // _opti) + (1 if(len(user_ids)%_opti) else 0)
 
         if(format == 'xml'):
             user_data = "<?xml version='1.0' encoding='utf8'?>\n<users>\n"
@@ -238,7 +245,6 @@ class VKApi():
                     raise Exception('Error while getting users information, error_code=' + str(response['error']['error_code']))
                 user_data.extend(response['response'])
             time.sleep(0.34)
-            user_data.extend(response['response'])
         return user_data
 
     def get_users_sequence_generator(self, from_id, to_id, fields):
@@ -355,6 +361,31 @@ class VKApi():
             users_data[el['id']] = el['response']
         return users_data
 
+    def _get_25_users_groups(self, ids):
+        code = '''var ids = ''' + str(ids).replace('\'', '"') +  ''';
+        var i = 0;
+        var ret = {};
+        while (i < 25 && i < ids.length)
+        {
+            ret.push({"id":ids[i], "response":API.groups.get({"user_id":ids[i], "extended":1, "count":500})});
+            i=i+1;
+        }
+        return ret;'''
+        resp = self.execute(code)
+        if('error' in resp):
+            raise Exception('Error while getting 25_users_groups, error: ' + str(resp['error'])) 
+        users_data = {}
+        for el in resp['response']:
+            if(el['response'] == False or el['response'] == False):
+                users_data[el['id']] = None
+                continue
+            user_groups = []
+            for group in el['response']['items']:
+                if(group['type']=='group'):
+                    user_groups.append(group['id'])
+            users_data[el['id']] = {'count':len(user_groups), 'items':user_groups}
+        return users_data    
+
     def _get_25_users_friends(self, ids):
         code = '''var ids = ''' + str(ids).replace('\'', '"') +  ''';
         var i = 0;
@@ -407,7 +438,8 @@ class VKApi():
         methods = {
             "friends":self._get_25_users_friends,
             "subs":self._get_25_users_subs,
-            "groups":self._get_25_users_subscriptions
+            "publics":self._get_25_users_subscriptions,
+            "groups":self._get_25_users_groups
         }
         methods_to_apply = []
         for info in infos:
@@ -420,11 +452,11 @@ class VKApi():
             for agr_info, method in methods_to_apply:
                 new_data = None
                 while not new_data:
-                    try:
-                        new_data = method(ids_to_aggregate)
-                    except:
-                        print('Something wrong, waiting...')
-                        time.sleep(3)
+                    #try:
+                    new_data = method(ids_to_aggregate)
+                    #except:
+                        #print('Something wrong, waiting...')
+                        #time.sleep(3)
                 for user, data in new_data.items():
                     try:
                         yield_data[user][agr_info] = data
