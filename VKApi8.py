@@ -452,11 +452,11 @@ class VKApi():
             for agr_info, method in methods_to_apply:
                 new_data = None
                 while not new_data:
-                    #try:
-                    new_data = method(ids_to_aggregate)
-                    #except:
-                        #print('Something wrong, waiting...')
-                        #time.sleep(3)
+                    try:
+                        new_data = method(ids_to_aggregate)
+                    except:
+                        print('Something wrong, waiting...')
+                        time.sleep(3)
                 for user, data in new_data.items():
                     try:
                         yield_data[user][agr_info] = data
