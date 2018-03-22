@@ -3,7 +3,7 @@
 
 Usage:
 ```Python3
-from VKApi8 import VKApi
+from vk_api8 import VKApi
 
 login = "+78005553535"
 password = "shashlichok72"
