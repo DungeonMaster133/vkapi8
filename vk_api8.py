@@ -318,7 +318,7 @@ class VKApi():
         users_data = {}
         for element in resp['response']:
             if not element['response'] or not element['response']:
-                users_data[element['id']] = Nones
+                users_data[element['id']] = None
                 continue
             users_data[element['id']] = element['response']
         return users_data
@@ -642,6 +642,24 @@ class VKApi():
             raise Exception('''Error while getting dialogs,
              error: {}'''.format(str(resp['error'])))
         return resp['response']
+
+    def accept_friend_request(self, id):
+        resp = self.api_request('friends.add', {'user_id':id}).json()
+        if 'error' in resp:
+            raise Exception('''Error while checking for new requests,
+             error: {}'''.format(str(resp['error'])))
+        return resp
+
+    def check_for_new_friend_requests(self):
+        resp = self.api_request('friends.getRequests', {'count':1000}).json()
+        if 'error' in resp:
+            raise Exception('''Error while checking for new requests,
+             error: {}'''.format(str(resp['error'])))
+        return resp['response']['items']
+
+    def accept_all_friend_requests(self):
+        for request in self.check_for_new_friend_requests():
+            self.accept_friend_request('id')
 
     def get_unread_messages(self):
         unread_dialogs = self.search_dialogs(unread=True)['items']
