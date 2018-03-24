@@ -204,15 +204,24 @@ class VKApi():
             raise RuntimeError("Missing some values in answer")
         return answer["access_token"], answer["user_id"]
 
-    def validate_users(self, user_ids):
+    def validate_users(self, user_ids, days_to_del=0, fields='', filter_func=None):
+        fields+=',last_seen'
         ret_ids = []
-        new_users = self.get_users_data(user_ids, '')
+        new_users = self.get_users_data(user_ids, fields)
         for user in new_users:
-            if 'deactivated' not in user:
-                ret_ids.append(user['id'])
+            if 'deactivated' not in user :
+                if 'last_seen' in user:
+                    days_since_last_seen = (int(time.time())-user['last_seen']['time'])//86400
+                    if(days_since_last_seen>=days_to_del):
+                        print('Abandoned')
+                        continue
+                if(filter_func and filter_func(user)):
+                    ret_ids.append(user['id'])
+                print('Filtered by custom filter')
+            print('Banned')
         return ret_ids
 
-    def get_users_data(self, user_ids, fields, data_format='csv', _opti=300):
+    def get_users_data(self, user_ids, fields='', data_format='csv', _opti=250):
         if(data_format != "csv" and data_format != "xml"):
             raise Exception('Error while getting users data, wrong format given: {}'.format(data_format))
         url_xml = '''https://api.vk.com/method/users.get.xml?
@@ -242,7 +251,8 @@ class VKApi():
                 for child in root:
                     user_data += ET.tostring(child, encoding='utf8', method='xml').decode('utf-8').replace("<?xml version='1.0' encoding='utf8'?>", "")
             else:
-                response = self.session.get(url.format(str(ids), fields,
+                ids_str = str(ids).replace('[', '').replace(']', '').replace('\'', '').replace(' ','')
+                response = self.session.get(url.format(str(ids_str), fields,
                                                        self.token, self.version)).json()
                 if 'error' in response:
                     raise Exception('''Error while getting users data,
