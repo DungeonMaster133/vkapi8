@@ -680,3 +680,18 @@ class VKApi():
             unread = self.get_dialog_messages(peer_id, dialog['unread'])
             unread_messages[peer_id] = unread['items']
         return unread_messages
+
+    def join_public(self, group_id):
+        resp = self.api_request('groups.join', {'group_id':group_id})
+        if 'error' in resp:
+            raise Exception('''Error while joining group,
+             error: {}'''.format(str(resp['error'])))
+        return resp
+
+    #post_id = string 'wall134643_101' or 'wall-1_123453456'
+    def repost_post(self, post_id, message=''):
+        resp = self.api_request('wall.repost', {'object':post_id, 'message':message})
+        if 'error' in resp:
+            raise Exception('''Error while reposting,
+             error: {}'''.format(str(resp['error'])))
+        return resp
