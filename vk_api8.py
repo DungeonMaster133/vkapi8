@@ -289,12 +289,12 @@ class VKApi():
         return json_response['response']
 
     def get_user_groups(self, user_id):
-        user_id = self.user_url_to_id(id)
+        user_id = self.user_url_to_id(user_id)
         groups = self._get_user_groups_by_offset(user_id)
         if groups['count'] > 1000:
             iterations = int(groups['count']/1000) - int(groups['count']%1000 == 0)
             for i in range(iterations):
-                groups['items'].extend(self._get_user_groups_by_offset(id, 1000*i)['items'])
+                groups['items'].extend(self._get_user_groups_by_offset(user_id, 1000*i)['items'])
         return groups
 
     def execute(self, code):
@@ -466,14 +466,12 @@ class VKApi():
             offset += 50
             print('Got {} posts out of {}'.format(offset, total_posts_count))
             for item in posts:
-                if item["text"] != "":
-                    text["author_text"] += text["author_text"]
+                if item["text"]:
                     text["author_text"] += item["text"]
-                    item["author_text"] += "\n#################################\n"
+                    text["author_text"] += "\n#################################\n"
                 if  "copy_history" in item.keys():
                     text["reposts_count"] = text["reposts_count"] + 1
                     if item["copy_history"][0]["text"] != "":
-                        text["copy_text"] += text["copy_text"]
                         text["copy_text"] += item["copy_history"][0]["text"]
                         text["copy_text"] += "\n###############################\n"
                 posts_count += 1
