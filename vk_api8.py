@@ -21,7 +21,7 @@ class VKApi():
                                     'offline' + (',' if scope != '' else '') + scope)[0]
         self.version = version
         self.session = session
-        self.pp = pprint.PrettyPrinter(depth=1)
+        self.pp = pprint.PrettyPrinter(depth=3)
 
     def send_fake_request(self):
         _fake_requests_methods = {
@@ -403,11 +403,37 @@ class VKApi():
              error: ''' + str(resp['error']))
         users_data = {}
         for element in resp['response']:
-            if not element['response'] or not element['response']:
+            if not element['response']:
                 users_data[element['id']] = None
                 continue
             if element['response']['count'] > 1000:
                 users_data[element['id']] = self.load_all_subs(element['id'])
+            else:
+                users_data[element['id']] = element['response']
+        return users_data
+
+    def _get_25_users_videos(self, ids):
+        code = '''var ids = ''' + str(ids).replace('\'', '"') +  ''';
+        var i = 0;
+        var ret = {};
+        while (i < 25 && i < ids.length)
+        {
+            ret.push({"id":ids[i], 
+            "response":API.video.get({"owner_id":ids[i], "count":200})});
+            i=i+1;
+        }
+        return ret;'''
+        resp = self.execute(code)
+        if 'error' in resp:
+            raise Exception('''Error while getting 25_users_videos,
+             error: ''' + str(resp['error']))
+        users_data = {}
+        for element in resp['response']:
+            if not element['response']:
+                users_data[element['id']] = None
+                continue
+            if element['response']['count'] > 200:
+                users_data[element['id']] = self.load_5k_videos(element['id'])
             else:
                 users_data[element['id']] = element['response']
         return users_data
@@ -417,7 +443,8 @@ class VKApi():
             "friends":self._get_25_users_friends,
             "subs":self._get_25_users_subs,
             "publics":self._get_25_users_subscriptions,
-            "groups":self._get_25_users_groups
+            "groups":self._get_25_users_groups,
+            "videos":self._get_25_users_videos
         }
         methods_to_apply = []
         for info in infos:
@@ -542,6 +569,34 @@ class VKApi():
         for i in range(count//25000 - int(count%25000 == 0)):
             subs['items'].extend(self._load_25k_subs(user_id, i*25000))
         return subs
+
+    def load_5k_videos(self, user_id):
+        code = '''var user = ''' + str(user_id) + ''';
+        var i = 0;
+        var ret = [];
+        var count = 5000;
+        var data = {};
+        while (i*200 < count &&  i<25)
+        {
+            data = API.videos.get({"user_id":user, 
+            "count":200, "offset":i*200});
+            count = data["count"];
+            ret.push(data["items"]);
+            i=i+1;
+        }
+        return {"count":count, "items":ret};'''
+        resp = self.execute(code)
+        if resp['response']['count'] is None:
+            return {'count':None, 'items':None}
+        if 'error' in resp:
+            raise Exception('''Error while getting 5k subs,
+             error: ''' + str(resp['error']))
+        subs = []
+        for array in resp['response']['items']:
+            subs.extend(array)
+        if 'execute_errors' in resp:
+            pass
+        return {'count':resp['response']['count'], 'items':subs}
 
     def get_friends_ids(self, user_id, count=25000):
         user_id = self.user_url_to_id(user_id)
