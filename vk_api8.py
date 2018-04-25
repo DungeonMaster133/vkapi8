@@ -508,9 +508,12 @@ class VKApi():
         iter_size = 500
         groups_data = {}
         for groups_chunk in [ids[pos:pos + iter_size] for pos in range(0, len(ids), iter_size)]:
-            for group in groups_chunk:
-                group_id = group.pop('id')
-                groups_data[group_id] = group
+            resp = self.api_request('groups.getById', {'group_ids':group_chunk})
+            if 'error' in resp:
+                raise Exception('Error while getting groups by id')
+            group_data = resp['response']
+            for group in group_data:
+                groups_data[group['id']] = {'name':group['name']}
         return groups_data
 
     def group_url_to_id(self, group_url):
