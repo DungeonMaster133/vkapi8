@@ -504,6 +504,15 @@ class VKApi():
                 posts_count += 1
         return text
 
+    def get_groups_by_id(self, ids):
+        iter_size = 500
+        groups_data = {}
+        for groups_chunk in [ids[pos:pos + iter_size] for pos in range(0, len(ids), iter_size)]:
+            for group in groups_chunk:
+                group_id = group.pop('id')
+                groups_data[group_id] = group
+        return groups_data
+
     def group_url_to_id(self, group_url):
         group_url = str(group_url)
         parts = group_url.split("/")
@@ -540,7 +549,7 @@ class VKApi():
         var data = {};
         while (i*1000 < count &&  i<25)
         {
-            data = API.users.getFollowers({"user_id":user, 
+            data = API.users.getFollowers({"user_id":user,
             "count":1000, "offset":i*1000 + ''' + str(offset) + '''});
             count = data["count"];
             ret.push(data["items"]);
