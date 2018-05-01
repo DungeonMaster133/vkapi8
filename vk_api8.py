@@ -261,7 +261,7 @@ class VKApi():
             time.sleep(0.34)
         return user_data
 
-    def get_users_sequence_generator(self, from_id, to_id, fields):
+    def get_users_sequence_generator(self, from_id, to_id, fields=""):
         _opti = 300
         iterations = (to_id-from_id) // _opti + 1
         for i in range(iterations):
@@ -274,6 +274,26 @@ class VKApi():
                 ids = ids[:to_id - (i*_opti + from_id)]
             response = self.api_request('users.get', {
                 'user_ids':str(ids).replace("[", "").replace("]", ""),
+                'fields':fields})
+            if 'error' in response:
+                raise Exception('''Error while getting users information,
+                 error: {}''' + str(response['error']['error_code']))
+            yield response['response']
+
+    def get_users_data_generator(self, ids, fields=""):
+        _opti = 300
+        iterations = len(ids) // _opti + 1
+        for i in range(iterations):
+            if i%15 == 14:
+                self.send_fake_request()
+                time.sleep(1)
+            print(str(i+1) + " of " + str(iterations))
+            ids_to_load = ids[i*_opti:(i+1)*_opti]
+            response = self.api_request('users.get', {
+                'user_ids':str(ids_to_load).replace("[", "")\
+                                           .replace("]", "")\
+                                           .replace("'", "")\
+                                           .replace(" ", ""),
                 'fields':fields})
             if 'error' in response:
                 raise Exception('''Error while getting users information,
