@@ -767,6 +767,13 @@ class VKApi():
             unread_messages[peer_id] = unread['items']
         return unread_messages
 
+    def send_message(self, peer_id, message):
+        resp = self.api_request('messages.send', {'peer_id':peer_id, 'message':message}).json()
+        if 'error' in resp:
+            raise Exception('''Error while checking for new requests,
+             error: {}'''.format(str(resp['error'])))
+        return resp['response']
+
     def join_public(self, group_id):
         resp = self.api_request('groups.join', {'group_id':group_id})
         if 'error' in resp:
