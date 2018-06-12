@@ -16,7 +16,8 @@ import requests
 
 EXCEPTIONS_MAP = dict(enumerate(['Wrong password/login',
                                  '401 Unauthorized',
-                                 'Internet issues'], 1))
+                                 'Internet issues',
+                                 'Blocked'], 1))
 
 class AuthException(Exception):
     def __init__(self, login, passw, client, scope, error_code):
@@ -38,6 +39,8 @@ class VKApi():
             raise AuthException(login, password, client, scope, 2)
         except urllib.error.URLError:
             raise AuthException(login, password, client, scope, 3)
+        except ValueError:
+            raise AuthException(login, password, client, scope, 4)
         self.version = version
         self.session = session
         self.pp = pprint.PrettyPrinter(depth=3)
