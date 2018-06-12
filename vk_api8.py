@@ -14,11 +14,30 @@ import http.cookiejar
 
 import requests
 
+EXCEPTIONS_MAP = dict(enumerate(['Wrong password/login',
+                                 '401 Unauthorized',
+                                 'Internet issues'], 1))
+
+class AuthException(Exception):
+    def __init__(self, login, passw, client, scope, error_code):
+        error = '''AuthException: {},
+               Arguments: login "{}", pass "{}",
+               client "{}",
+               scope"{}"'''.format(EXCEPTIONS_MAP[error_code], login, passw, client, scope)
+        Exception.__init__(self, error)
+
 class VKApi():
     def __init__(self, login, password, client, scope='',
                  version='5.69', session=requests.Session()):
-        self.token = self.get_token(login, password, client,
-                                    'offline' + (',' if scope != '' else '') + scope)[0]
+        try:
+            self.token = self.get_token(login, password, client,
+                                        'offline' + (',' if scope != '' else '') + scope)[0]
+        except RuntimeError:
+            raise AuthException(login, password, client, scope, 1)
+        except urllib.error.HTTPError:
+            raise AuthException(login, password, client, scope, 2)
+        except urllib.error.URLError:
+            raise AuthException(login, password, client, scope, 3)
         self.version = version
         self.session = session
         self.pp = pprint.PrettyPrinter(depth=3)
