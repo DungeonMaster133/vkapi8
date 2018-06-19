@@ -237,9 +237,13 @@ class VKApi():
                     if days_to_del and days_since_last_seen>=days_to_del:
                         print('Abandoned')
                         continue
-                if filter_func and filter_func(user):
+                if filter_func:
+                    if filter_func(user):
+                        ret_ids.append(user['id'])
+                    else:
+                        print('Filtered by custom filter')
+                else:
                     ret_ids.append(user['id'])
-                print('Filtered by custom filter')
             print('Banned')
         return ret_ids
 
