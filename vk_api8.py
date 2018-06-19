@@ -234,17 +234,17 @@ class VKApi():
             if 'deactivated' not in user :
                 if 'last_seen' in user:
                     days_since_last_seen = (int(time.time())-user['last_seen']['time'])//86400
-                    if(days_since_last_seen>=days_to_del):
+                    if days_to_del and days_since_last_seen>=days_to_del:
                         print('Abandoned')
                         continue
-                if(filter_func and filter_func(user)):
+                if filter_func and filter_func(user):
                     ret_ids.append(user['id'])
                 print('Filtered by custom filter')
             print('Banned')
         return ret_ids
 
     def get_users_data(self, user_ids, fields='', data_format='csv', _opti=250):
-        if(data_format != "csv" and data_format != "xml"):
+        if data_format != "csv" and data_format != "xml":
             raise Exception('Error while getting users data, wrong format given: {}'.format(data_format))
         url_xml = '''https://api.vk.com/method/users.get.xml?
                              user_ids={}&fields={}&access_token={}&v={}'''
