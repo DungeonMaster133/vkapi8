@@ -229,23 +229,21 @@ class VKApi():
     def validate_users(self, user_ids, days_to_del=0, fields='', filter_func=None):
         fields+=',last_seen'
         ret_ids = []
+        excluded_ids = {"banned": list(), "abandoned": list(), "excluded": list()}
         new_users = self.get_users_data(user_ids, fields)
         for user in new_users:
-            if 'deactivated' not in user :
-                if 'last_seen' in user:
-                    days_since_last_seen = (int(time.time())-user['last_seen']['time'])//86400
-                    if days_to_del and days_since_last_seen>=days_to_del:
-                        print('Abandoned')
-                        continue
-                if filter_func:
-                    if filter_func(user):
-                        ret_ids.append(user['id'])
-                    else:
-                        print('Filtered by custom filter')
-                else:
-                    ret_ids.append(user['id'])
-            print('Banned')
-        return ret_ids
+            if 'deactivated' in user:
+                excluded_ids['banned'].append(user)
+                continue
+            if 'last_seen' in user:
+                days_since_last_seen = (int(time.time())-user['last_seen']['time'])//86400
+                if days_to_del and days_since_last_seen>=days_to_del:
+                    excluded_ids['abandoned'].append(user)
+                    continue
+            if filter_func and not filter_func(user):
+                excluded_ids['excluded'].append(user)
+            ret_ids.append(user['id'])
+        return {'clean': ret_ids, 'filtered': excluded_ids}
 
     def get_users_data(self, user_ids, fields='', data_format='csv', _opti=250):
         if data_format != "csv" and data_format != "xml":
