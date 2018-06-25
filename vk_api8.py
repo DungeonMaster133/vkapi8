@@ -19,13 +19,28 @@ EXCEPTIONS_MAP = dict(enumerate(['Wrong password/login',
                                  'Internet issues',
                                  'Blocked'], 1))
 
-class AuthException(Exception):
+
+class VKApiException(Exception):
+    pass
+
+
+class AuthException(VKApiException):
     def __init__(self, login, passw, client, scope, error_code):
         error = '''AuthException: {},
                Arguments: login "{}", pass "{}",
                client "{}",
                scope"{}"'''.format(EXCEPTIONS_MAP[error_code], login, passw, client, scope)
-        Exception.__init__(self, error)
+        VKApiException.__init__(self, error)
+
+
+class MethodException(VKApiException):
+    def __init__(self, error):
+        """error = '''MethodException: {},
+               Arguments: login "{}", pass "{}",
+               client "{}",
+               scope"{}"'''.format(EXCEPTIONS_MAP[error_code], login, passw, client, scope)"""
+        VKApiException.__init__(self, str(error))
+
 
 class VKApi():
     def __init__(self, login, password, client, scope='',
@@ -285,22 +300,21 @@ class VKApi():
             time.sleep(0.34)
         return user_data
 
-    def get_users_sequence_generator(self, from_id, to_id, fields=""):
-        _opti = 300
-        iterations = (to_id-from_id) // _opti + 1
+    def get_users_sequence_generator(self, from_id, to_id, fields="", opti=300):
+        iterations = (to_id-from_id) // opti + 1
         for i in range(iterations):
             if i%15 + 1 == 0:
                 self.send_fake_request()
                 time.sleep(1)
             print(str(i+1) + " of " + str(iterations))
-            ids = list(range(i*_opti+from_id, (i+1)*_opti+from_id))
-            if to_id - (i*_opti+from_id) < _opti:
-                ids = ids[:to_id - (i*_opti + from_id)]
+            ids = list(range(i*opti+from_id, (i+1)*opti+from_id))
+            if to_id - (i*opti+from_id) < opti:
+                ids = ids[:to_id - (i*opti + from_id)]
             response = self.api_request('users.get', {
-                'user_ids':str(ids).replace("[", "").replace("]", ""),
-                'fields':fields})
+                'user_ids': str(ids).replace("[", "").replace("]", ""),
+                'fields': fields})
             if 'error' in response:
-                raise Exception('''Error while getting users information,
+                raise MethodException('''Error while getting users information,
                  error: {}''' + str(response['error']['error_code']))
             yield response['response']
 
