@@ -24,6 +24,11 @@ class VKApiException(Exception):
     pass
 
 
+class NetworkException(Exception):
+    def __init__(self, error):
+        VKApiException.__init__(self, str(error))
+
+
 class AuthException(VKApiException):
     def __init__(self, login, passw, client, scope, error_code):
         error = '''AuthException: {},
@@ -35,10 +40,6 @@ class AuthException(VKApiException):
 
 class MethodException(VKApiException):
     def __init__(self, error):
-        """error = '''MethodException: {},
-               Arguments: login "{}", pass "{}",
-               client "{}",
-               scope"{}"'''.format(EXCEPTIONS_MAP[error_code], login, passw, client, scope)"""
         VKApiException.__init__(self, str(error))
 
 
@@ -364,7 +365,7 @@ class VKApi():
         resp = self.session.post('https://api.vk.com/method/{}'.format(method), data=data)
         time.sleep(0.34)
         if resp.status_code != 200:
-            raise Exception('''Network error while executing {} method,
+            raise NetworkException('''Network error while executing {} method,
              error code: {}'''.format(method, str(resp.status_code)))
         return resp.json()
 
