@@ -335,7 +335,7 @@ class VKApi():
                                            .replace(" ", ""),
                 'fields':fields})
             if 'error' in response:
-                raise Exception('''Error while getting users information,
+                raise MethodException('''Error while getting users information,
                  error: {}''' + str(response['error']['error_code']))
             yield response['response']
 
