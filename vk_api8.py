@@ -555,7 +555,7 @@ class VKApi():
             print('Got {} posts out of {}'.format(offset, posts['count']))
             for item in posts['items']:
                 if item["text"]:
-                    text["author_text"].append(["text"])
+                    text["author_text"].append(item["text"])
                 if "copy_history" in item:
                     text["reposts_count"] += 1
                     if item["copy_history"][0]["text"]:
