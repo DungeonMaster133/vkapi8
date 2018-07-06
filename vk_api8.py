@@ -548,6 +548,7 @@ class VKApi():
                 "reposts_count": 0}
         posts_count = 0
         offset = 0
+        posts = {'count': 100}
         while posts_count < number_of_posts and posts_count < posts['count']:
             posts = self._get_posts_by_offset(wall_id, offset, 100, domain)
             offset += 100
