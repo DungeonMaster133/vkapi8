@@ -537,7 +537,7 @@ class VKApi():
             request_data['owner_id'] = wall_id
         resp = self.api_request('wall.get', request_data)
         if 'error' in resp:
-            raise Exception('''Error while getting wall posts,
+            raise MethodException('''Error while getting wall posts,
              error=''' + str(resp['error']))
         return resp['response']
 
