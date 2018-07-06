@@ -529,37 +529,36 @@ class VKApi():
             ids_to_aggregate = list(itertools.islice(i, 0, 25))
             yield yield_data
 
-    def get_posts_by_offset(self, user_id, offset, count, flag, domain):
-        request_data = {'offset':offset, 'count':count, }
+    def _get_posts_by_offset(self, wall_id, offset, count, domain):
+        request_data = {'offset':offset, 'count':count}
         if domain:
-            request_data['domain'] = user_id
+            request_data['domain'] = wall_id
         else:
-            request_data['owner_id'] = user_id
+            request_data['owner_id'] = wall_id
         resp = self.api_request('wall.get', request_data)
         if 'error' in resp:
             raise Exception('''Error while getting wall posts,
              error=''' + str(resp['error']))
-        return resp['response']["count" if flag == "count" else "items"]
+        return resp['response']
 
-    def get_posts(self, user_id, domain=False):
-        text = {"author_text": "", "copy_text": "", "posts_count": 0, "reposts_count": 0}
-        total_posts_count = self.get_posts_by_offset(user_id, 0, 0, "count", domain)
-        text["posts_count"] = total_posts_count
+    def get_posts(self, wall_id, domain=False, number_of_posts=100):
+        text = {"author_text": list(),
+                "copy_text": list(),
+                "posts_count": 0,
+                "reposts_count": 0}
         posts_count = 0
         offset = 0
-        while posts_count < total_posts_count:
-            posts = self.get_posts_by_offset(user_id, offset, 50, "", domain)
-            offset += 50
-            print('Got {} posts out of {}'.format(offset, total_posts_count))
-            for item in posts:
+        while posts_count < number_of_posts and posts_count < posts['count']:
+            posts = self._get_posts_by_offset(wall_id, offset, 100, domain)
+            offset += 100
+            print('Got {} posts out of {}'.format(offset, posts['count']))
+            for item in posts['items']:
                 if item["text"]:
-                    text["author_text"] += item["text"]
-                    text["author_text"] += "\n#################################\n"
-                if  "copy_history" in item.keys():
-                    text["reposts_count"] = text["reposts_count"] + 1
-                    if item["copy_history"][0]["text"] != "":
-                        text["copy_text"] += item["copy_history"][0]["text"]
-                        text["copy_text"] += "\n###############################\n"
+                    text["author_text"].append(["text"])
+                if "copy_history" in item:
+                    text["reposts_count"] += 1
+                    if item["copy_history"][0]["text"]:
+                        text["copy_text"].append(item["copy_history"][0]["text"])
                 posts_count += 1
         return text
 
