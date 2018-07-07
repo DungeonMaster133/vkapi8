@@ -575,7 +575,7 @@ class VKApi():
                 raise Exception('Error while getting groups by id')
             group_data = resp['response']
             for group in group_data:
-                groups_data[group['id']] = {'name':group['name'], 'description': group['description']}
+                groups_data[group['id']] = {'name':group['name'], 'description': group.get('description', '')}
         return groups_data
 
     def group_url_to_id(self, group_url):
