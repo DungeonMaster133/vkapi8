@@ -556,6 +556,7 @@ class VKApi():
             for item in posts['items']:
                 if item["text"]:
                     text["author_text"].append(item["text"])
+                    text['posts_count'] += 1
                 if "copy_history" in item:
                     text["reposts_count"] += 1
                     if item["copy_history"][0]["text"]:
