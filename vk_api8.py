@@ -569,7 +569,8 @@ class VKApi():
         groups_data = {}
         for groups_chunk in [ids[pos:pos + iter_size] for pos in range(0, len(ids), iter_size)]:
             resp = self.api_request('groups.getById', \
-                {'group_ids':str(groups_chunk).replace('[','').replace(']','').replace(' ','')})
+                {'group_ids': str(groups_chunk).replace('[','').replace(']','').replace(' ',''),
+                 'fields': 'description'})
             if 'error' in resp:
                 raise Exception('Error while getting groups by id')
             group_data = resp['response']
