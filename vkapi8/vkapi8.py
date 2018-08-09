@@ -4,15 +4,11 @@ import re
 import itertools
 import xml.etree.ElementTree as ET
 import datetime
-import pprint
-from html.parser import HTMLParser
-from urllib.parse import urlparse
-import urllib.request
-import urllib.parse
-import urllib.error
-import http.cookiejar
 
 import requests
+
+from .accesstoken import *
+
 
 EXCEPTIONS_MAP = dict(enumerate(['Wrong password/login',
                                  '401 Unauthorized',
@@ -45,10 +41,11 @@ class MethodException(VKApiException):
 
 class VKApi():
     def __init__(self, login, password, client, scope='',
-                 version='5.69', session=requests.Session()):
+                 version='5.69', session=requests.Session(),
+                 debug=False):
         try:
-            self.token = self.get_token(login, password, client,
-                                        'offline' + (',' if scope != '' else '') + scope)[0]
+            self.token = get_token(login, password, client,
+                                   'offline' + (',' if scope != '' else '') + scope)[0]
         except RuntimeError:
             raise AuthException(login, password, client, scope, 1)
         except urllib.error.HTTPError:
@@ -59,8 +56,9 @@ class VKApi():
             raise AuthException(login, password, client, scope, 4)
         self.version = version
         self.session = session
-        self.pp = pprint.PrettyPrinter(depth=3)
+        self.debug = debug
 
+    
     def send_fake_request(self):
         _fake_requests_methods = {
             'database.getCities':'country_id',
@@ -71,10 +69,10 @@ class VKApi():
         method = list(_fake_requests_methods.keys())[rand]
         self.api_request(method, {_fake_requests_methods[method]:str(random.randint(1, 100))})
 
+    
     def get_region(self, query, city_id):
         json_response = self.api_request('database.getCities', {'country_id':1, 'q':query})
         if json_response.get('error'):
-            print(json_response.get('error'))
             raise Exception("Error while getting region, error_code=".format(
                 str(json_response['error']['error_code'])))
         if not json_response['response']['items']:
@@ -84,6 +82,7 @@ class VKApi():
                 if item["id"] == city_id:
                     return item["region"]
         return json_response['response']['items'][0]["title"]
+
 
     def _get_group_25k_members(self, group_id, fields="", offset=0):
         code = '''var group = "{}";
@@ -108,16 +107,16 @@ class VKApi():
             membs.extend(array)
         return {"count":resp['response']['count'], "items":membs}
 
+
     def get_all_group_members(self, group_id, fields=""):
         group_id = self.group_url_to_id(group_id)
-        print('Getting ' + str(group_id) + ' members')
         members = self._get_group_25k_members(group_id, fields)
         if members['count'] > 25000:
             for i in range(members['count']//25000 - int(members['count']%25000 == 0)):
-                print('Getting ' + str(group_id) + ' members ' + 'iteration ' + str(i))
                 members['items'].extend(self._get_group_25k_members(
                     group_id, fields, (i+1)*25000)['items'])
         return members
+
 
     def _get_25_groups_members(self, group_ids, fields=""):
         code = '''var groups = {};
@@ -141,6 +140,7 @@ class VKApi():
                 groups_data[group_id] = self.get_all_group_members(group_id, fields)
         return groups_data
 
+
     def get_groups_members(self, group_ids, fields=""):
         group_ids = [self.group_url_to_id(group) for group in group_ids]
         members = self._get_25_groups_members(group_ids[:25], fields)
@@ -149,98 +149,6 @@ class VKApi():
                 members.update(self._get_25_groups_members(group_ids[(i+1)*25:(i+2)*25], fields))
         return members
 
-    def get_token(self, email, password, client_id, scope):
-        class FormParser(HTMLParser):
-            def __init__(self):
-                HTMLParser.__init__(self)
-                self.url = None
-                self.params = {}
-                self.in_form = False
-                self.form_parsed = False
-                self.method = "GET"
-
-            def handle_starttag(self, tag, attrs):
-                tag = tag.lower()
-                if tag == "form":
-                    if self.form_parsed:
-                        raise RuntimeError("Second form on page")
-                    if self.in_form:
-                        raise RuntimeError("Already in form")
-                    self.in_form = True
-                if not self.in_form:
-                    return
-                attrs = dict((name.lower(), value) for name, value in attrs)
-                if tag == "form":
-                    self.url = attrs["action"]
-                    if "method" in attrs:
-                        self.method = attrs["method"].upper()
-                elif tag == "input" and "type" in attrs and "name" in attrs:
-                    if attrs["type"] in ["hidden", "text", "password"]:
-                        self.params[attrs["name"]] = attrs["value"] if "value" in attrs else ""
-
-            def handle_endtag(self, tag):
-                tag = tag.lower()
-                if tag == "form":
-                    if not self.in_form:
-                        raise RuntimeError("Unexpected end of <form>")
-                    self.in_form = False
-                    self.form_parsed = True
-        def split_key_value(kv_pair):
-            kv = kv_pair.split("=")
-            return kv[0], kv[1]
-
-        # Authorization form
-        def auth_user(email, password, client_id, scope, opener):
-            response = opener.open(
-                "https://oauth.vk.com/oauth/authorize?" + \
-                "redirect_uri=http://oauth.vk.com/blank.html&response_type=token&" + \
-                "client_id=%s&scope=%s&display=wap" % (client_id, ",".join(scope))
-                )
-            doc = response.read()
-            parser = FormParser()
-            parser.feed(doc.decode("utf-8"))
-            parser.close()
-            if not parser.form_parsed or parser.url is None or "pass" not in parser.params or \
-              "email" not in parser.params:
-                raise RuntimeError("Something wrong")
-            parser.params["email"] = email
-            parser.params["pass"] = password
-            if parser.method == "POST":
-                response = opener.open(parser.url,
-                                       urllib.parse.urlencode(parser.params).encode("utf-8"))
-            else:
-                raise NotImplementedError("Method '%s'" % parser.method)
-            return response.read(), response.geturl()
-
-        # Permission request form
-        def give_access(doc, opener):
-            parser = FormParser()
-            parser.feed(doc.decode("utf-8"))
-            parser.close()
-            if not parser.form_parsed or parser.url is None:
-                raise RuntimeError("Something wrong")
-            if parser.method == "POST":
-                response = opener.open(parser.url,
-                                       urllib.parse.urlencode(parser.params).encode("utf-8"))
-            else:
-                raise NotImplementedError("Method '%s'" % parser.method)
-            return response.geturl()
-
-        if not isinstance(scope, list):
-            scope = [scope]
-        opener = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
-            urllib.request.HTTPRedirectHandler())
-        doc, url = auth_user(email, password, client_id, scope, opener)
-        if urlparse(url).path != "/blank.html":
-            # Need to give access to requested scope
-            url = give_access(doc, opener)
-        if urlparse(url).path != "/blank.html":
-            raise RuntimeError("Expected success here")
-        answer = dict(split_key_value(kv_pair) for kv_pair in urlparse(url).fragment.split("&"))
-        if "access_token" not in answer or "user_id" not in answer:
-            raise RuntimeError("Missing some values in answer")
-        return answer["access_token"], answer["user_id"]
 
     def validate_users(self, user_ids, days_to_del=0, fields='', filter_func=None):
         fields+=',last_seen'
@@ -261,6 +169,7 @@ class VKApi():
             ret_ids.append(user['id'])
         return {'clean': ret_ids, 'filtered': excluded_ids}
 
+
     def get_users_data(self, user_ids, fields='', data_format='csv', _opti=250):
         if data_format != "csv" and data_format != "xml":
             raise Exception('Error while getting users data, wrong format given: {}'.format(data_format))
@@ -273,7 +182,6 @@ class VKApi():
         else:
             user_data = []
         for i in range(iterations):
-            print(str(i+1) + " of " + str(iterations))
             try:
                 if (len(user_ids) - _opti*i) < _opti:
                     ids = user_ids[_opti*i:]
@@ -301,13 +209,13 @@ class VKApi():
             time.sleep(0.34)
         return user_data
 
+
     def get_users_sequence_generator(self, from_id, to_id, fields="", opti=300):
         iterations = (to_id-from_id) // opti + 1
         for i in range(iterations):
             if i%15 + 1 == 0:
                 self.send_fake_request()
                 time.sleep(1)
-            print(str(i+1) + " of " + str(iterations))
             ids = list(range(i*opti+from_id, (i+1)*opti+from_id))
             if to_id - (i*opti+from_id) < opti:
                 ids = ids[:to_id - (i*opti + from_id)]
@@ -319,6 +227,7 @@ class VKApi():
                  error: {}''' + str(response['error']['error_code']))
             yield response['response']
 
+
     def get_users_data_generator(self, ids, fields=""):
         _opti = 300
         iterations = len(ids) // _opti + 1
@@ -326,7 +235,6 @@ class VKApi():
             if i%15 == 14:
                 self.send_fake_request()
                 time.sleep(1)
-            print(str(i+1) + " of " + str(iterations))
             ids_to_load = ids[i*_opti:(i+1)*_opti]
             response = self.api_request('users.get', {
                 'user_ids':str(ids_to_load).replace("[", "")\
@@ -339,6 +247,7 @@ class VKApi():
                  error: {}''' + str(response['error']['error_code']))
             yield response['response']
 
+
     def _get_user_groups_by_offset(self, user_id, offset=0):
         json_response = self.api_request('groups.get',
                                          {'user_id':user_id, 'offset':offset, 'count':1000})
@@ -346,6 +255,7 @@ class VKApi():
             raise Exception('''Error while getting group members,
              error=''' + str(json_response['error']))
         return json_response['response']
+
 
     def get_user_groups(self, user_id):
         user_id = self.user_url_to_id(user_id)
@@ -356,8 +266,10 @@ class VKApi():
                 groups['items'].extend(self._get_user_groups_by_offset(user_id, 1000*i)['items'])
         return groups
 
+
     def execute(self, code):
         return self.api_request('execute', {'code':code})
+
 
     def api_request(self, method, data):
         data['access_token'] = self.token
@@ -368,6 +280,7 @@ class VKApi():
             raise NetworkException('''Network error while executing {} method,
              error code: {}'''.format(method, str(resp.status_code)))
         return resp.json()
+
 
     def _get_25_users_subscriptions(self, ids):
         code = '''var ids = ''' + str(ids).replace('\'', '"') +  ''';
@@ -382,7 +295,7 @@ class VKApi():
         return ret;'''
         resp = self.execute(code)
         if 'error' in resp:
-            raise Exception('''Error while getting 25_users_groups,
+            raise MethodException('''Error while getting 25_users_groups,
              error: ''' + str(resp['error']))
         users_data = {}
         for element in resp['response']:
@@ -391,6 +304,7 @@ class VKApi():
                 continue
             users_data[element['id']] = element['response']
         return users_data
+
 
     def _get_25_users_groups(self, ids):
         code = '''var ids = ''' + str(ids).replace('\'', '"') +  ''';
@@ -405,7 +319,7 @@ class VKApi():
         return ret;'''
         resp = self.execute(code)
         if 'error' in resp:
-            raise Exception('''Error while getting 25_users_groups,
+            raise MethodException('''Error while getting 25_users_groups,
              error: ''' + str(resp['error']))
         users_data = {}
         for element in resp['response']:
@@ -418,6 +332,7 @@ class VKApi():
                     user_groups.append(group['id'])
             users_data[element['id']] = {'count':len(user_groups), 'items':user_groups}
         return users_data
+
 
     def _get_25_users_friends(self, ids):
         code = '''var ids = ''' + str(ids).replace('\'', '"') +  ''';
@@ -432,7 +347,7 @@ class VKApi():
         return ret;'''
         resp = self.execute(code)
         if 'error' in resp:
-            raise Exception('''Error while getting 25_users_friends,
+            raise MethodException('''Error while getting 25_users_friends,
              error: ''' + str(resp['error']))
         users_data = {}
         for element in resp['response']:
@@ -444,6 +359,7 @@ class VKApi():
             else:
                 users_data[element['id']] = element['response']
         return users_data
+
 
     def _get_25_users_subs(self, ids):
         code = '''var ids = ''' + str(ids).replace('\'', '"') +  ''';
@@ -458,7 +374,7 @@ class VKApi():
         return ret;'''
         resp = self.execute(code)
         if 'error' in resp:
-            raise Exception('''Error while getting 25_users_subs,
+            raise MethodException('''Error while getting 25_users_subs,
              error: ''' + str(resp['error']))
         users_data = {}
         for element in resp['response']:
@@ -470,6 +386,7 @@ class VKApi():
             else:
                 users_data[element['id']] = element['response']
         return users_data
+
 
     def _get_25_users_videos(self, ids):
         code = '''var ids = ''' + str(ids).replace('\'', '"') +  ''';
@@ -484,7 +401,7 @@ class VKApi():
         return ret;'''
         resp = self.execute(code)
         if 'error' in resp:
-            raise Exception('''Error while getting 25_users_videos,
+            raise MethodException('''Error while getting 25_users_videos,
              error: ''' + str(resp['error']))
         users_data = {}
         for element in resp['response']:
@@ -497,37 +414,48 @@ class VKApi():
                 users_data[element['id']] = element['response']
         return users_data
 
-    def get_users_extended_info(self, ids, infos):
+
+    def get_users_extended_info(self, ids, infos, retries=8):
         methods = {
-            "friends":self._get_25_users_friends,
-            "subs":self._get_25_users_subs,
-            "publics":self._get_25_users_subscriptions,
-            "groups":self._get_25_users_groups,
-            "videos":self._get_25_users_videos
+            "friends": self._get_25_users_friends,
+            "subs": self._get_25_users_subs,
+            "publics": self._get_25_users_subscriptions,
+            "groups": self._get_25_users_groups,
+            "videos": self._get_25_users_videos
         }
-        methods_to_apply = []
-        for info in infos:
-            if info in methods:
-                methods_to_apply.append((info, methods[info]))
+        methods_to_apply = [(method_name, method)\
+                            for method_name, method in methods.items()\
+                            if method_name in infos]
         i = iter(ids)
         ids_to_aggregate = list(itertools.islice(i, 0, 25))
         while ids_to_aggregate:
             yield_data = {}
-            for agr_info, method in methods_to_apply:
+            for method_name, method in methods_to_apply:
                 new_data = None
+                tries_count = 0
                 while not new_data:
                     try:
                         new_data = method(ids_to_aggregate)
-                    except:
-                        print('Something wrong, waiting...')
-                        time.sleep(3)
+                    except MethodException as method_exc:
+                        if self.debug: print(method_exc)
+                        if tries_count > retries:
+                            if self.debug: print('exiting')
+                            raise method_exc
+                        tries_count += 1
+                        time.sleep(10)
+                    except NetworkException as net_exc:
+                        if self.debug: print(net_exc)
+                        if tries_count > retries:
+                            if self.debug: print('exiting')
+                            raise net_exc
+                        tries_count += 1
+                        time.sleep(10)
                 for user, data in new_data.items():
-                    try:
-                        yield_data[user][agr_info] = data
-                    except:
-                        yield_data[user] = {agr_info:data}
+                    yield_data[user] = {method_data[0]: None for method_data in methods_to_apply}
+                    yield_data[user][method_name] = data
             ids_to_aggregate = list(itertools.islice(i, 0, 25))
             yield yield_data
+
 
     def _get_posts_by_offset(self, wall_id, offset, count, domain):
         request_data = {'offset':offset, 'count':count}
@@ -541,6 +469,7 @@ class VKApi():
              error=''' + str(resp['error']))
         return resp['response']
 
+
     def get_posts(self, wall_id, domain=False, number_of_posts=100):
         text = {"author_text": list(),
                 "copy_text": list(),
@@ -552,7 +481,6 @@ class VKApi():
         while posts_count < number_of_posts and posts_count < posts['count']:
             posts = self._get_posts_by_offset(wall_id, offset, 100, domain)
             offset += 100
-            print('Got {} posts out of {}'.format(offset, posts['count']))
             for item in posts['items']:
                 if item["text"]:
                     text["author_text"].append(item["text"])
@@ -563,6 +491,7 @@ class VKApi():
                         text["copy_text"].append(item["copy_history"][0]["text"])
                 posts_count += 1
         return text
+
 
     def get_groups_by_id(self, ids):
         iter_size = 500
@@ -578,6 +507,7 @@ class VKApi():
                 groups_data[group['id']] = {'name':group['name'], 'description': group.get('description', '')}
         return groups_data
 
+
     def group_url_to_id(self, group_url):
         group_url = str(group_url)
         parts = group_url.split("/")
@@ -587,6 +517,7 @@ class VKApi():
         if re.match(r'(club|public)\d', group_id) != None:
             group_id = re.search(r'\d.*', group_id).group(0)
         return group_id
+
 
     def user_url_to_id(self, user_url):
         user_url = str(user_url)
@@ -598,6 +529,7 @@ class VKApi():
             user_id = re.search(r'\d.*', user_id).group(0)
         return user_id
 
+    
     def get_user_id(self, link):
         domain = link.split("/")[-1]
         resp = self.api_request('users.get', {'user_ids':domain})
@@ -606,6 +538,7 @@ class VKApi():
              error: {}'''.format(str(resp['error'])))
         return resp['response'][0]['id']
 
+    
     def _load_25k_subs(self, user_id, offset=0):
         code = '''var user = ''' + str(user_id) + ''';
         var i = 0;
@@ -634,6 +567,7 @@ class VKApi():
             pass
         return {'count':resp['response']['count'], 'items':subs}
 
+    
     def load_all_subs(self, user_id):
         user_id = self.user_url_to_id(user_id)
         subs = self._load_25k_subs(user_id)
@@ -643,6 +577,7 @@ class VKApi():
         for i in range(count//25000 - int(count%25000 == 0)):
             subs['items'].extend(self._load_25k_subs(user_id, i*25000))
         return subs
+
 
     def load_5k_videos(self, user_id):
         code = '''var user = ''' + str(user_id) + ''';
@@ -672,6 +607,7 @@ class VKApi():
             pass
         return {'count':resp['response']['count'], 'items':subs}
 
+
     def get_friends_ids(self, user_id, count=25000):
         user_id = self.user_url_to_id(user_id)
         code = '''var user = ''' + str(user_id) + ''';
@@ -699,6 +635,7 @@ class VKApi():
         if 'execute_errors' in resp:
             pass
         return {"count": resp['response']['count'], "items":friends}
+
 
     def _get_10k_messages(self, peer_id, date=time.strftime("%d%m%Y"), _offset=0):
         messages = {}
@@ -739,12 +676,14 @@ class VKApi():
             self.send_fake_request()
         return {"count": resp['response']['count'], "filtered":filtered, "items":messages}
 
+
     def get_dialog_messages(self, peer_id, count=100, date=time.strftime("%d%m%Y")):
         resp = self.api_request('messages.search', {'peer_id':peer_id, 'date':date, 'count':count})
         if 'error' in resp:
             raise Exception('''Error while getting dialog messages,
              error: {}'''.format(str(resp['error'])))
         return resp['response']
+
 
     def get_all_messages_generator(self, peer_id, opti=7500, limit=7500):
         count = 10000
@@ -770,6 +709,7 @@ class VKApi():
             j += i
             yield messages
 
+
     def search_dialogs(self, unread=False, offset=0):
         resp = self.api_request('messages.getDialogs',
                                 {'offset':offset,
@@ -780,12 +720,14 @@ class VKApi():
              error: {}'''.format(str(resp['error'])))
         return resp['response']
 
+
     def accept_friend_request(self, id):
         resp = self.api_request('friends.add', {'user_id':id}).json()
         if 'error' in resp:
             raise Exception('''Error while checking for new requests,
              error: {}'''.format(str(resp['error'])))
         return resp
+
 
     def check_for_new_friend_requests(self):
         resp = self.api_request('friends.getRequests', {'count':1000}).json()
@@ -794,9 +736,11 @@ class VKApi():
              error: {}'''.format(str(resp['error'])))
         return resp['response']['items']
 
+
     def accept_all_friend_requests(self):
         for request in self.check_for_new_friend_requests():
             self.accept_friend_request('id')
+
 
     def get_unread_messages(self):
         unread_dialogs = self.search_dialogs(unread=True)['items']
@@ -808,6 +752,7 @@ class VKApi():
             unread_messages[peer_id] = unread['items']
         return unread_messages
 
+
     def send_message(self, peer_id, message):
         resp = self.api_request('messages.send', {'peer_id':peer_id, 'message':message})
         if 'error' in resp:
@@ -815,12 +760,14 @@ class VKApi():
              error: {}'''.format(str(resp['error'])))
         return resp
 
+
     def join_public(self, group_id):
         resp = self.api_request('groups.join', {'group_id':group_id})
         if 'error' in resp:
             raise Exception('''Error while joining group,
              error: {}'''.format(str(resp['error'])))
         return resp
+
 
     #post_id = string 'wall134643_101' or 'wall-1_123453456'
     def repost_post(self, post_id, message=''):
