@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 import datetime
 
 import requests
+from requests.exceptions import RequestException
 
 from .accesstoken import *
 
@@ -274,7 +275,11 @@ class VKApi():
     def api_request(self, method, data):
         data['access_token'] = self.token
         data['v'] = self.version
-        resp = self.session.post('https://api.vk.com/method/{}'.format(method), data=data)
+        try:
+            resp = self.session.post('https://api.vk.com/method/{}'.format(method), data=data)
+        except RequestException as e:
+            if self.debug: print(e)
+            raise NetworkException(str(e))
         time.sleep(0.34)
         if resp.status_code != 200:
             raise NetworkException('''Network error while executing {} method,
