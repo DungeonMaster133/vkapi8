@@ -13,6 +13,6 @@ def test_init(scope='groups'):
 
 
 def test_get_groups_data():
-    for chunk in api.get_groups_by_id_generator(list(range(1, 2000)),
+    for chunk in api.get_groups_by_id_generator(list(range(1, 3000)),
                                                 'description,age_limits,city,country,status'):
         printer.pprint(chunk[0])

@@ -501,7 +501,10 @@ class VKApi():
 
     def get_groups_by_id_generator(self, ids, fields=''):
         iter_size = 500
-        for groups_chunk in (ids[pos:pos + iter_size] for pos in range(0, len(ids), iter_size)):
+        for i, groups_chunk in enumerate(ids[pos:pos + iter_size]\
+                                         for pos in range(0, len(ids), iter_size)):
+            if not i % 5:
+                self.send_fake_request()
             retries = 5
             resp = None
             while not resp or 'error' in resp:
