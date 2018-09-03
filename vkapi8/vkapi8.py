@@ -41,6 +41,7 @@ class MethodException(VKApiException):
 
 
 class VKApi():
+
     def __init__(self, login, password, client, scope='',
                  version='5.69', session=requests.Session(),
                  debug=False):
@@ -498,19 +499,21 @@ class VKApi():
         return text
 
 
-    def get_groups_by_id(self, ids):
+    def get_groups_by_id_generator(self, ids):
         iter_size = 500
-        groups_data = {}
-        for groups_chunk in [ids[pos:pos + iter_size] for pos in range(0, len(ids), iter_size)]:
-            resp = self.api_request('groups.getById', \
-                {'group_ids': str(groups_chunk).replace('[','').replace(']','').replace(' ',''),
-                 'fields': 'description'})
-            if 'error' in resp:
-                raise Exception('Error while getting groups by id')
-            group_data = resp['response']
-            for group in group_data:
-                groups_data[group['id']] = {'name':group['name'], 'description': group.get('description', '')}
-        return groups_data
+        for groups_chunk in (ids[pos:pos + iter_size] for pos in range(0, len(ids), iter_size)):
+            retries = 5
+            resp = None
+            while 'error' in resp:
+                retries -= 1
+                if not retries:
+                    raise MethodException('Error while getting groups by id')
+                resp = self.api_request('groups.getById',
+                                        {'group_ids': ''.join(groups_chunk),
+                                         'fields': 'description'})
+                if 'error' in resp:
+                    time.sleep(3)
+            yield resp['response']
 
 
     def group_url_to_id(self, group_url):
