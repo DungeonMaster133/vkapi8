@@ -499,18 +499,18 @@ class VKApi():
         return text
 
 
-    def get_groups_by_id_generator(self, ids):
+    def get_groups_by_id_generator(self, ids, fields=''):
         iter_size = 500
         for groups_chunk in (ids[pos:pos + iter_size] for pos in range(0, len(ids), iter_size)):
             retries = 5
             resp = None
-            while 'error' in resp:
+            while not resp or 'error' in resp:
                 retries -= 1
                 if not retries:
                     raise MethodException('Error while getting groups by id')
                 resp = self.api_request('groups.getById',
-                                        {'group_ids': ''.join(groups_chunk),
-                                         'fields': 'description'})
+                                        {'group_ids': ','.join(str(grp) for grp in groups_chunk),
+                                         'fields': fields})
                 if 'error' in resp:
                     time.sleep(3)
             yield resp['response']
