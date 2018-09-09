@@ -16,9 +16,11 @@ api = VKApi(login, password, client, scope, version, session)
 id = 125341435
 user_friends = api.get_friends_ids(id)
 friends_count = user_friends['count']
-friends_ids = user_friends['items']```
+friends_ids = user_friends['items']
+```
 
 Instalation:
 --------------------
 
-`pip3 install vkapi8`
+``pip3 install vkapi8``
+  
