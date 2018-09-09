@@ -20,4 +20,5 @@ friends_ids = user_friends['items']```
 
 Instalation:
 --------------------
-pip3 install vkapi8
+
+`pip3 install vkapi8`
